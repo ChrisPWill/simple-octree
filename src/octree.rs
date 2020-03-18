@@ -1,11 +1,20 @@
 use std::convert::{AsMut, AsRef};
 
+#[derive(Default)]
 pub struct Octree<T> {
     children: [Option<Box<Octree<T>>>; 8],
     objects: Vec<T>,
 }
 
 impl<T> Octree<T> {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            children: Default::default(),
+            objects: Vec::new(),
+        }
+    }
+
     fn get_child_idx(pos_x: bool, pos_y: bool, pos_z: bool) -> usize {
         match (pos_x, pos_y, pos_z) {
             (false, false, false) => 0,
@@ -48,4 +57,15 @@ impl<T> Octree<T> {
 
     #[must_use]
     pub fn get_objects_mut(&mut self) -> &mut Vec<T> { &mut self.objects }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Octree;
+
+    #[test]
+    fn test_get_child_initial() {
+        let o = Octree::<(f32, f32, f32)>::new();
+        assert!(o.get_child(false, false, false).is_none());
+    }
 }
