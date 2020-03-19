@@ -1,22 +1,26 @@
-use std::convert::{AsMut, AsRef};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    convert::{AsMut, AsRef},
+};
 
 /// A barebones octree offering just the methods required for accessing and
 /// modifying its contents. Other management structures/functions will be needed
 /// to make this more useful, especially for the purpose of querying contents.
 #[derive(Default)]
-pub struct Octree<T> {
-    children: [Option<Box<Octree<T>>>; 8],
-    objects: Vec<T>,
+pub struct Octree<C>
+where
+    C: Default,
+{
+    children: [Option<Box<Octree<C>>>; 8],
+    objects: C,
 }
 
-impl<T> Octree<T> {
+impl<C> Octree<C>
+where
+    C: Default,
+{
     #[must_use]
-    pub fn new() -> Self {
-        Self {
-            children: Default::default(),
-            objects: Vec::new(),
-        }
-    }
+    pub fn new() -> Self { Self::default() }
 
     /// Gets a reference to a child given an index.
     #[must_use]
@@ -94,12 +98,12 @@ impl<T> Octree<T> {
 
     /// Gets a reference to the underlying collection of objects in the node.
     #[must_use]
-    pub const fn get_objects(&self) -> &Vec<T> { &self.objects }
+    pub fn get_objects(&self) -> &C { self.objects.borrow() }
 
     /// Gets a mutable reference to the underlying collection of objects in the
     /// node.
     #[must_use]
-    pub fn get_objects_mut(&mut self) -> &mut Vec<T> { &mut self.objects }
+    pub fn get_objects_mut(&mut self) -> &mut C { self.objects.borrow_mut() }
 }
 
 #[cfg(test)]
@@ -108,19 +112,19 @@ mod tests {
 
     #[test]
     fn test_get_child_out_of_bounds_initial() {
-        let o = Octree::<(f32, f32, f32)>::new();
+        let o = Octree::<Vec<(f32, f32, f32)>>::new();
         assert!(o.get_child(999).is_none());
     }
 
     #[test]
     fn test_get_child_initial() {
-        let o = Octree::<(f32, f32, f32)>::new();
+        let o = Octree::<Vec<(f32, f32, f32)>>::new();
         assert!(o.get_child(0).is_none());
     }
 
     #[test]
     fn test_get_child_pos_initial() {
-        let o = Octree::<(f32, f32, f32)>::new();
+        let o = Octree::<Vec<(f32, f32, f32)>>::new();
         assert!(o.get_child_at_pos(false, false, false).is_none());
     }
 }
