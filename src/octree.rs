@@ -15,12 +15,50 @@ where
     objects: C,
 }
 
+pub enum AddChildError {
+    AlreadyAdded,
+    OutOfBoundsIdx,
+}
+
 impl<C> Octree<C>
 where
     C: Default,
 {
     #[must_use]
     pub fn new() -> Self { Self::default() }
+
+    /// Adds and returns a reference to a child at a particular index.
+    ///
+    /// # Errors
+    /// Returns an error if the idx is out of range (i.e. idx >= 8) or if the
+    /// child is already added.
+    pub fn add_child(
+        &mut self,
+        idx: usize,
+    ) -> Result<&mut Self, AddChildError> {
+        if idx >= self.children.len() {
+            Err(AddChildError::OutOfBoundsIdx)
+        } else if self.children[idx].is_some() {
+            Err(AddChildError::AlreadyAdded)
+        } else {
+            self.children[idx] = Some(Box::new(Self::default()));
+            self.get_child_mut(idx).ok_or(AddChildError::OutOfBoundsIdx)
+        }
+    }
+
+    /// Adds and returns a reference to a child at an index based on whether the
+    /// child is at the positive or negative side of each axis.
+    ///
+    /// # Errors
+    /// Returns an error if the child is already added.
+    pub fn add_child_at_pos(
+        &mut self,
+        pos_x: bool,
+        pos_y: bool,
+        pos_z: bool,
+    ) -> Result<&mut Self, AddChildError> {
+        self.add_child(Self::get_child_idx_at_pos(pos_x, pos_y, pos_z))
+    }
 
     /// Gets a reference to a child given an index.
     #[must_use]
@@ -126,5 +164,19 @@ mod tests {
     fn test_get_child_pos_initial() {
         let o = Octree::<Vec<(f32, f32, f32)>>::new();
         assert!(o.get_child_at_pos(false, false, false).is_none());
+    }
+
+    #[test]
+    fn test_add_child() {
+        let mut o = Octree::<Vec<(f32, f32, f32)>>::new();
+        let result = o.add_child(0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_add_child_at_pos() {
+        let mut o = Octree::<Vec<(f32, f32, f32)>>::new();
+        let result = o.add_child_at_pos(false, false, false);
+        assert!(result.is_ok());
     }
 }
