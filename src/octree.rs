@@ -18,6 +18,26 @@ impl<T> Octree<T> {
         }
     }
 
+    /// Gets a reference to a child given an index.
+    #[must_use]
+    pub fn get_child(&self, idx: usize) -> Option<&Self> {
+        if idx >= self.children.len() {
+            None
+        } else {
+            self.children[idx].as_ref().map(AsRef::as_ref)
+        }
+    }
+
+    /// Gets a mutable reference to a child given an index.
+    #[must_use]
+    pub fn get_child_mut(&mut self, idx: usize) -> Option<&mut Self> {
+        if idx >= self.children.len() {
+            None
+        } else {
+            self.children[idx].as_mut().map(AsMut::as_mut)
+        }
+    }
+
     /// Gets a child index given whether the child is at the positive or
     /// negative side of an axis.
     ///
@@ -52,9 +72,7 @@ impl<T> Octree<T> {
         pos_y: bool,
         pos_z: bool,
     ) -> Option<&Self> {
-        self.children[Self::get_child_idx_at_pos(pos_x, pos_y, pos_z)]
-            .as_ref()
-            .map(AsRef::as_ref)
+        self.get_child(Self::get_child_idx_at_pos(pos_x, pos_y, pos_z))
     }
 
     /// Gets a mutable reference to a child given whether the child is at the
@@ -71,9 +89,7 @@ impl<T> Octree<T> {
         pos_y: bool,
         pos_z: bool,
     ) -> Option<&mut Self> {
-        self.children[Self::get_child_idx_at_pos(pos_x, pos_y, pos_z)]
-            .as_mut()
-            .map(AsMut::as_mut)
+        self.get_child_mut(Self::get_child_idx_at_pos(pos_x, pos_y, pos_z))
     }
 
     /// Gets a reference to the underlying collection of objects in the node.
@@ -91,7 +107,19 @@ mod tests {
     use super::Octree;
 
     #[test]
+    fn test_get_child_out_of_bounds_initial() {
+        let o = Octree::<(f32, f32, f32)>::new();
+        assert!(o.get_child(999).is_none());
+    }
+
+    #[test]
     fn test_get_child_initial() {
+        let o = Octree::<(f32, f32, f32)>::new();
+        assert!(o.get_child(0).is_none());
+    }
+
+    #[test]
+    fn test_get_child_pos_initial() {
         let o = Octree::<(f32, f32, f32)>::new();
         assert!(o.get_child_at_pos(false, false, false).is_none());
     }
