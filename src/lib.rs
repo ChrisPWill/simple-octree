@@ -6,7 +6,12 @@
 
 mod managed_octree;
 
-pub use managed_octree::{ManagedOctree, ManagedOctreeData};
+pub use managed_octree::{
+    ManagedHashMapOctree,
+    ManagedOctree,
+    ManagedOctreeData,
+    ManagedVecOctree,
+};
 use std::{
     borrow::{Borrow, BorrowMut},
     convert::{AsMut, AsRef},
@@ -36,6 +41,14 @@ where
 {
     #[must_use]
     pub fn new() -> Self { Self::default() }
+
+    #[must_use]
+    pub fn new_with_data(data: D) -> Self {
+        Self {
+            data,
+            ..Self::default()
+        }
+    }
 
     /// Adds and returns a reference to a child at a particular index.
     ///
