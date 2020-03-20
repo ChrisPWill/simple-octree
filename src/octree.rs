@@ -7,12 +7,12 @@ use std::{
 /// modifying its contents. Other management structures/functions will be needed
 /// to make this more useful, especially for the purpose of querying contents.
 #[derive(Default)]
-pub struct Octree<C>
+pub struct Octree<D>
 where
-    C: Default,
+    D: Default,
 {
-    children: [Option<Box<Octree<C>>>; 8],
-    objects: C,
+    children: [Option<Box<Octree<D>>>; 8],
+    data: D,
 }
 
 #[derive(Debug)]
@@ -21,9 +21,9 @@ pub enum AddChildError {
     OutOfBoundsIdx,
 }
 
-impl<C> Octree<C>
+impl<D> Octree<D>
 where
-    C: Default,
+    D: Default,
 {
     #[must_use]
     pub fn new() -> Self { Self::default() }
@@ -166,14 +166,13 @@ where
         self.get_child_mut(Self::get_child_idx_at_pos(pos_x, pos_y, pos_z))
     }
 
-    /// Gets a reference to the underlying collection of objects in the node.
+    /// Gets a reference to the underlying data in the node.
     #[must_use]
-    pub fn get_objects(&self) -> &C { self.objects.borrow() }
+    pub fn get_data(&self) -> &D { self.data.borrow() }
 
-    /// Gets a mutable reference to the underlying collection of objects in the
-    /// node.
+    /// Gets a mutable reference to the underlying data in the node.
     #[must_use]
-    pub fn get_objects_mut(&mut self) -> &mut C { self.objects.borrow_mut() }
+    pub fn get_data_mut(&mut self) -> &mut D { self.data.borrow_mut() }
 }
 
 #[cfg(test)]
