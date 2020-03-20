@@ -7,3 +7,6 @@ description = "A simple octree implementation written in Rust."
 license = "MIT"
 repository = "https://github.com/ChrisPWill/simple-octree"
 readme = "README.md"
+
+[dependencies]
+len-trait = "0.6.1"
