@@ -3,7 +3,7 @@ name = "simple-octree"
 version = "0.1.0"
 authors = ["Chris Williams <chris@chrispwill.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
+description = "A simple octree implementation written in Rust."
+license = "MIT"
+repository = "https://github.com/ChrisPWill/simple-octree"
+readme = "README.md"
