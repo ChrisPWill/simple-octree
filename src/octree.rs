@@ -15,6 +15,7 @@ where
     objects: C,
 }
 
+#[derive(Debug)]
 pub enum AddChildError {
     AlreadyAdded,
     OutOfBoundsIdx,
@@ -49,6 +50,11 @@ where
     /// Adds and returns a reference to a child at an index based on whether the
     /// child is at the positive or negative side of each axis.
     ///
+    /// # Arguments
+    /// * `pos_x` - positive x axis if true, negative if false.
+    /// * `pos_y` - positive y axis if true, negative if false.
+    /// * `pos_z` - positive z axis if true, negative if false.
+    ///
     /// # Errors
     /// Returns an error if the child is already added.
     pub fn add_child_at_pos(
@@ -58,6 +64,32 @@ where
         pos_z: bool,
     ) -> Result<&mut Self, AddChildError> {
         self.add_child(Self::get_child_idx_at_pos(pos_x, pos_y, pos_z))
+    }
+
+    /// Removes a child and returns the owned value, if it exists.
+    pub fn remove_child(&mut self, idx: usize) -> Option<Self> {
+        if self.children.get(idx).is_none() {
+            None
+        } else {
+            self.children[idx].take().map(|c| *c)
+        }
+    }
+
+    /// Removes a child at an index based on whether the child is at the
+    /// positive or negative side of each access and returns the owned value, if
+    /// it exists.
+    ///
+    /// # Arguments
+    /// * `pos_x` - positive x axis if true, negative if false.
+    /// * `pos_y` - positive y axis if true, negative if false.
+    /// * `pos_z` - positive z axis if true, negative if false.
+    pub fn remove_child_at_pos(
+        &mut self,
+        pos_x: bool,
+        pos_y: bool,
+        pos_z: bool,
+    ) -> Option<Self> {
+        self.remove_child(Self::get_child_idx_at_pos(pos_x, pos_y, pos_z))
     }
 
     /// Gets a reference to a child given an index.
@@ -178,5 +210,23 @@ mod tests {
         let mut o = Octree::<Vec<(f32, f32, f32)>>::new();
         let result = o.add_child_at_pos(false, false, false);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_remove_child() {
+        let mut o = Octree::<Vec<(f32, f32, f32)>>::new();
+        o.add_child(0).unwrap();
+        let result = o.remove_child(0);
+        assert!(result.is_some());
+        assert!(o.get_child(0).is_none());
+    }
+
+    #[test]
+    fn test_remove_child_at_pos() {
+        let mut o = Octree::<Vec<(f32, f32, f32)>>::new();
+        o.add_child_at_pos(false, false, false).unwrap();
+        let result = o.remove_child_at_pos(false, false, false);
+        assert!(result.is_some());
+        assert!(o.get_child_at_pos(false, false, false).is_none());
     }
 }
