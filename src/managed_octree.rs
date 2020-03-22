@@ -1,42 +1,47 @@
 use super::Octree;
 use len_trait::{Empty, Len};
+use num::One;
 use std::{
     borrow::{Borrow, BorrowMut},
     collections::HashMap,
     hash::Hash,
 };
 
-pub type ManagedOctree<D> = Octree<ManagedOctreeData<D>>;
-pub type ManagedVecOctree<T> = ManagedOctree<Vec<T>>;
-pub type ManagedHashMapOctree<K, V> = ManagedOctree<HashMap<K, V>>;
+pub type ManagedOctree<D, S> = Octree<ManagedOctreeData<D, S>>;
+pub type ManagedVecOctree<T, S> = ManagedOctree<Vec<T>, S>;
+pub type ManagedHashMapOctree<K, V, S> = ManagedOctree<HashMap<K, V>, S>;
 
-pub struct ManagedOctreeData<D>
+pub struct ManagedOctreeData<D, S>
 where
     D: Default + Empty + Len,
+    S: Default + One,
 {
+    centre: (S, S, S),
+    half_length: S,
     len: usize,
     data: D,
 }
 
-impl<D> Default for ManagedOctreeData<D>
+impl<D, S> Default for ManagedOctreeData<D, S>
 where
     D: Default + Empty + Len,
+    S: Default + One,
 {
     fn default() -> Self {
         Self {
+            centre: (S::default(), S::default(), S::default()),
+            half_length: S::one(),
             len: 0,
             data: D::default(),
         }
     }
 }
 
-impl<D> ManagedOctreeData<D>
+impl<D, S> ManagedOctreeData<D, S>
 where
     D: Default + Empty + Len,
+    S: Default + One,
 {
-    #[must_use]
-    pub fn new() -> Self { Self::default() }
-
     /// Gets a reference to the underlying data in the node.
     #[must_use]
     pub fn get_data(&self) -> &D { self.data.borrow() }
@@ -46,32 +51,53 @@ where
     pub fn get_data_mut(&mut self) -> &mut D { self.data.borrow_mut() }
 }
 
-impl<T> ManagedVecOctree<T> {
-    #[must_use]
-    pub fn new_managed() -> Self {
-        Self::new_with_data(ManagedOctreeData::new())
-    }
-}
-
-impl<K, V> ManagedHashMapOctree<K, V>
+impl<T, S> ManagedVecOctree<T, S>
 where
-    K: Eq + Hash,
+    S: Default + One,
 {
     #[must_use]
-    pub fn new_managed() -> Self {
-        Self::new_with_data(ManagedOctreeData::new())
+    pub fn new_managed(centre: (S, S, S), half_length: S) -> Self {
+        Self::new_with_data(ManagedOctreeData {
+            centre,
+            half_length,
+            ..ManagedOctreeData::default()
+        })
     }
 }
 
-impl<T> Empty for ManagedVecOctree<T> {
+impl<K, V, S> ManagedHashMapOctree<K, V, S>
+where
+    K: Eq + Hash,
+    S: Default + One,
+{
+    #[must_use]
+    pub fn new_managed(centre: (S, S, S), half_length: S) -> Self {
+        Self::new_with_data(ManagedOctreeData {
+            centre,
+            half_length,
+            ..ManagedOctreeData::default()
+        })
+    }
+}
+
+impl<T, S> Empty for ManagedVecOctree<T, S>
+where
+    S: Default + One,
+{
     fn is_empty(&self) -> bool { self.data.len == 0 }
 }
 
-impl<T> Len for ManagedVecOctree<T> {
+impl<T, S> Len for ManagedVecOctree<T, S>
+where
+    S: Default + One,
+{
     fn len(&self) -> usize { self.data.len }
 }
 
-impl<T> ManagedVecOctree<T> {
+impl<T, S> ManagedVecOctree<T, S>
+where
+    S: Default + One,
+{
     /// Adds data to the node without flushing/rebalancing the tree.
     pub fn add(&mut self, item: T) {
         self.data.data.push(item);
@@ -85,23 +111,26 @@ impl<T> ManagedVecOctree<T> {
     }
 }
 
-impl<K, V> Empty for ManagedHashMapOctree<K, V>
+impl<K, V, S> Empty for ManagedHashMapOctree<K, V, S>
 where
     K: Eq + Hash,
+    S: Default + One,
 {
     fn is_empty(&self) -> bool { self.data.len == 0 }
 }
 
-impl<K, V> Len for ManagedHashMapOctree<K, V>
+impl<K, V, S> Len for ManagedHashMapOctree<K, V, S>
 where
     K: Eq + Hash,
+    S: Default + One,
 {
     fn len(&self) -> usize { self.data.len }
 }
 
-impl<K, V> ManagedHashMapOctree<K, V>
+impl<K, V, S> ManagedHashMapOctree<K, V, S>
 where
     K: Eq + Hash,
+    S: Default + One,
 {
     /// Adds data to the node without flushing/rebalancing the tree.
     pub fn add(&mut self, (key, value): (K, V)) {
@@ -124,7 +153,8 @@ mod tests {
 
     #[test]
     fn test_vec_add() {
-        let mut o = ManagedVecOctree::<f32>::new_managed();
+        let mut o =
+            ManagedVecOctree::<f32, f32>::new_managed((0.0, 0.0, 0.0), 1000.0);
         assert_eq!(o.len(), 0);
         o.add(123.45);
         assert_eq!(o.len(), 1);
@@ -132,7 +162,10 @@ mod tests {
 
     #[test]
     fn test_hash_add() {
-        let mut o = ManagedHashMapOctree::<u32, f32>::new_managed();
+        let mut o = ManagedHashMapOctree::<u32, f32, f32>::new_managed(
+            (0.0, 0.0, 0.0),
+            1000.0,
+        );
         assert_eq!(o.len(), 0);
         o.add((123, 456.789));
         assert_eq!(o.len(), 1);
