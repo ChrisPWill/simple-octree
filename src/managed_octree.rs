@@ -5,6 +5,7 @@ use std::{
     borrow::{Borrow, BorrowMut},
     collections::HashMap,
     hash::Hash,
+    ops::{Add, Div, Sub},
 };
 
 pub type ManagedOctree<D, S> = Octree<ManagedOctreeData<D, S>>;
@@ -18,6 +19,7 @@ where
 {
     centre: (S, S, S),
     half_length: S,
+    max_size: usize,
     len: usize,
     data: D,
 }
@@ -25,12 +27,18 @@ where
 impl<D, S> Default for ManagedOctreeData<D, S>
 where
     D: Default + Empty + Len,
-    S: Default + One,
+    S: Default
+        + Copy
+        + One
+        + Add<S, Output = S>
+        + Sub<S, Output = S>
+        + Div<S, Output = S>,
 {
     fn default() -> Self {
         Self {
             centre: (S::default(), S::default(), S::default()),
             half_length: S::one(),
+            max_size: 0,
             len: 0,
             data: D::default(),
         }
@@ -40,7 +48,12 @@ where
 impl<D, S> ManagedOctreeData<D, S>
 where
     D: Default + Empty + Len,
-    S: Default + One,
+    S: Default
+        + Copy
+        + One
+        + Add<S, Output = S>
+        + Sub<S, Output = S>
+        + Div<S, Output = S>,
 {
     /// Gets a reference to the underlying data in the node.
     #[must_use]
@@ -51,9 +64,52 @@ where
     pub fn get_data_mut(&mut self) -> &mut D { self.data.borrow_mut() }
 }
 
+impl<D, S> ManagedOctree<D, S>
+where
+    D: Default + Empty + Len,
+    S: Default
+        + Copy
+        + One
+        + Add<S, Output = S>
+        + Sub<S, Output = S>
+        + Div<S, Output = S>,
+{
+    /// Set `max_size`
+    #[must_use]
+    pub fn with_max_size(mut self, max_size: usize) -> Self {
+        self.data.max_size = max_size;
+        self
+    }
+
+    fn get_child_centre_and_half_length_at_pos(
+        &self,
+        pos_x: bool,
+        pos_y: bool,
+        pos_z: bool,
+    ) -> ((S, S, S), S) {
+        let (cx, cy, cz) = self.data.centre;
+        let hhl = self.data.half_length / (S::one() + S::one());
+        match (pos_x, pos_y, pos_z) {
+            (false, false, false) => ((cx - hhl, cy - hhl, cz - hhl), (hhl)),
+            (false, false, true) => ((cx - hhl, cy - hhl, cz + hhl), (hhl)),
+            (false, true, false) => ((cx - hhl, cy + hhl, cz - hhl), (hhl)),
+            (false, true, true) => ((cx - hhl, cy + hhl, cz + hhl), (hhl)),
+            (true, false, false) => ((cx + hhl, cy - hhl, cz - hhl), (hhl)),
+            (true, false, true) => ((cx + hhl, cy - hhl, cz + hhl), (hhl)),
+            (true, true, false) => ((cx + hhl, cy + hhl, cz - hhl), (hhl)),
+            (true, true, true) => ((cx + hhl, cy + hhl, cz + hhl), (hhl)),
+        }
+    }
+}
+
 impl<T, S> ManagedVecOctree<T, S>
 where
-    S: Default + One,
+    S: Default
+        + Copy
+        + One
+        + Add<S, Output = S>
+        + Sub<S, Output = S>
+        + Div<S, Output = S>,
 {
     #[must_use]
     pub fn new_managed(centre: (S, S, S), half_length: S) -> Self {
@@ -68,7 +124,12 @@ where
 impl<K, V, S> ManagedHashMapOctree<K, V, S>
 where
     K: Eq + Hash,
-    S: Default + One,
+    S: Default
+        + Copy
+        + One
+        + Add<S, Output = S>
+        + Sub<S, Output = S>
+        + Div<S, Output = S>,
 {
     #[must_use]
     pub fn new_managed(centre: (S, S, S), half_length: S) -> Self {
@@ -82,21 +143,36 @@ where
 
 impl<T, S> Empty for ManagedVecOctree<T, S>
 where
-    S: Default + One,
+    S: Default
+        + Copy
+        + One
+        + Add<S, Output = S>
+        + Sub<S, Output = S>
+        + Div<S, Output = S>,
 {
     fn is_empty(&self) -> bool { self.data.len == 0 }
 }
 
 impl<T, S> Len for ManagedVecOctree<T, S>
 where
-    S: Default + One,
+    S: Default
+        + Copy
+        + One
+        + Add<S, Output = S>
+        + Sub<S, Output = S>
+        + Div<S, Output = S>,
 {
     fn len(&self) -> usize { self.data.len }
 }
 
 impl<T, S> ManagedVecOctree<T, S>
 where
-    S: Default + One,
+    S: Default
+        + Copy
+        + One
+        + Add<S, Output = S>
+        + Sub<S, Output = S>
+        + Div<S, Output = S>,
 {
     /// Adds data to the node without flushing/rebalancing the tree.
     pub fn add(&mut self, item: T) {
@@ -114,7 +190,12 @@ where
 impl<K, V, S> Empty for ManagedHashMapOctree<K, V, S>
 where
     K: Eq + Hash,
-    S: Default + One,
+    S: Default
+        + Copy
+        + One
+        + Add<S, Output = S>
+        + Sub<S, Output = S>
+        + Div<S, Output = S>,
 {
     fn is_empty(&self) -> bool { self.data.len == 0 }
 }
@@ -122,7 +203,12 @@ where
 impl<K, V, S> Len for ManagedHashMapOctree<K, V, S>
 where
     K: Eq + Hash,
-    S: Default + One,
+    S: Default
+        + Copy
+        + One
+        + Add<S, Output = S>
+        + Sub<S, Output = S>
+        + Div<S, Output = S>,
 {
     fn len(&self) -> usize { self.data.len }
 }
@@ -130,7 +216,12 @@ where
 impl<K, V, S> ManagedHashMapOctree<K, V, S>
 where
     K: Eq + Hash,
-    S: Default + One,
+    S: Default
+        + Copy
+        + One
+        + Add<S, Output = S>
+        + Sub<S, Output = S>
+        + Div<S, Output = S>,
 {
     /// Adds data to the node without flushing/rebalancing the tree.
     pub fn add(&mut self, (key, value): (K, V)) {
@@ -150,6 +241,52 @@ where
 mod tests {
     use super::{ManagedHashMapOctree, ManagedVecOctree};
     use len_trait::Len;
+
+    #[test]
+    fn test_with_max_size() {
+        let o =
+            ManagedVecOctree::<f32, f32>::new_managed((0.0, 0.0, 0.0), 1000.0)
+                .with_max_size(3);
+        assert_eq!(o.data.max_size, 3);
+    }
+
+    #[test]
+    fn test_get_child_centre_and_half_length_neg() {
+        let o =
+            ManagedVecOctree::<f32, f32>::new_managed((0.0, 0.0, 0.0), 1000.0);
+        let ((cx, cy, cz), half_length) =
+            o.get_child_centre_and_half_length_at_pos(false, false, false);
+        assert_relative_eq!(cx, -500.0);
+        assert_relative_eq!(cy, -500.0);
+        assert_relative_eq!(cz, -500.0);
+        assert_relative_eq!(half_length, 500.0);
+    }
+
+    #[test]
+    fn test_get_child_centre_and_half_length_pos() {
+        let o =
+            ManagedVecOctree::<f32, f32>::new_managed((0.0, 0.0, 0.0), 1000.0);
+        let ((cx, cy, cz), half_length) =
+            o.get_child_centre_and_half_length_at_pos(true, true, true);
+        assert_relative_eq!(cx, 500.0);
+        assert_relative_eq!(cy, 500.0);
+        assert_relative_eq!(cz, 500.0);
+        assert_relative_eq!(half_length, 500.0);
+    }
+
+    #[test]
+    fn test_get_child_centre_and_half_length_partial_pos_off_centre() {
+        let o = ManagedVecOctree::<f32, f32>::new_managed(
+            (100.0, 200.0, 300.0),
+            1000.0,
+        );
+        let ((cx, cy, cz), half_length) =
+            o.get_child_centre_and_half_length_at_pos(true, false, true);
+        assert_relative_eq!(cx, 600.0);
+        assert_relative_eq!(cy, -300.0);
+        assert_relative_eq!(cz, 800.0);
+        assert_relative_eq!(half_length, 500.0);
+    }
 
     #[test]
     fn test_vec_add() {

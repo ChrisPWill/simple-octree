@@ -8,6 +8,9 @@ license = "MIT"
 repository = "https://github.com/ChrisPWill/simple-octree"
 readme = "README.md"
 
+[dev-dependencies]
+approx = "0.3.2"
+
 [dependencies]
 len-trait = "0.6.1"
 num = "0.2.1"
