@@ -45,6 +45,7 @@ where
     centre: (S, S, S),
     half_length: S,
     max_size: usize,
+    drop_below_size: usize,
     len: usize,
     data: D,
 }
@@ -64,6 +65,7 @@ where
             centre: (S::default(), S::default(), S::default()),
             half_length: S::one(),
             max_size: 0,
+            drop_below_size: 1,
             len: 0,
             data: D::default(),
         }
@@ -103,6 +105,19 @@ where
     #[must_use]
     pub fn with_max_size(mut self, max_size: usize) -> Self {
         self.data.max_size = max_size;
+        self
+    }
+
+    /// Set `drop_below_size`
+    ///
+    /// Panics when set to 0
+    #[must_use]
+    pub fn with_drop_below_size(mut self, drop_below_size: usize) -> Self {
+        if drop_below_size == 0 {
+            panic!("drop_below_size must be greater than 0");
+        }
+
+        self.data.drop_below_size = drop_below_size;
         self
     }
 
@@ -235,6 +250,21 @@ where
 mod tests {
     use super::{ManagedHashMapOctree, ManagedVecOctree};
     use len_trait::Len;
+
+    #[test]
+    fn test_with_drop_below_size() {
+        let o =
+            ManagedVecOctree::<f32, f32>::new_managed((0.0, 0.0, 0.0), 1000.0)
+                .with_drop_below_size(3);
+        assert_eq!(o.data.drop_below_size, 3);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_with_drop_below_size_0_panics() {
+        let _ = ManagedVecOctree::<f32, f32>::new_managed((0.0, 0.0, 0.0), 1000.0)
+            .with_drop_below_size(0);
+    }
 
     #[test]
     fn test_with_max_size() {
