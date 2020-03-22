@@ -62,13 +62,14 @@ where
     pub fn add_child(
         &mut self,
         idx: usize,
+        child: Self,
     ) -> Result<&mut Self, AddChildError> {
         if idx >= self.children.len() {
             Err(AddChildError::OutOfBoundsIdx)
         } else if self.children[idx].is_some() {
             Err(AddChildError::AlreadyAdded)
         } else {
-            self.children[idx] = Some(Box::new(Self::default()));
+            self.children[idx] = Some(Box::new(child));
             self.get_child_mut(idx).ok_or(AddChildError::OutOfBoundsIdx)
         }
     }
@@ -88,8 +89,9 @@ where
         pos_x: bool,
         pos_y: bool,
         pos_z: bool,
+        child: Self,
     ) -> Result<&mut Self, AddChildError> {
-        self.add_child(Self::get_child_idx_at_pos(pos_x, pos_y, pos_z))
+        self.add_child(Self::get_child_idx_at_pos(pos_x, pos_y, pos_z), child)
     }
 
     /// Removes a child and returns the owned value, if it exists.
@@ -155,6 +157,21 @@ where
             (true, false, true) => 5,
             (true, true, false) => 6,
             (true, true, true) => 7,
+        }
+    }
+
+    /// Panics if idx > 7
+    fn get_child_pos_at_idx(idx: usize) -> (bool, bool, bool) {
+        match idx {
+            0 => (false, false, false),
+            1 => (false, false, true),
+            2 => (false, true, false),
+            3 => (false, true, true),
+            4 => (true, false, false),
+            5 => (true, false, true),
+            6 => (true, true, false),
+            7 => (true, true, true),
+            _ => panic!("idx > 7"),
         }
     }
 
@@ -226,21 +243,21 @@ mod tests {
     #[test]
     fn test_add_child() {
         let mut o = Octree::<Vec<(f32, f32, f32)>>::new();
-        let result = o.add_child(0);
+        let result = o.add_child(0, Octree::new());
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_add_child_at_pos() {
         let mut o = Octree::<Vec<(f32, f32, f32)>>::new();
-        let result = o.add_child_at_pos(false, false, false);
+        let result = o.add_child_at_pos(false, false, false, Octree::new());
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_remove_child() {
         let mut o = Octree::<Vec<(f32, f32, f32)>>::new();
-        o.add_child(0).unwrap();
+        o.add_child(0, Octree::new()).unwrap();
         let result = o.remove_child(0);
         assert!(result.is_some());
         assert!(o.get_child(0).is_none());
@@ -249,7 +266,8 @@ mod tests {
     #[test]
     fn test_remove_child_at_pos() {
         let mut o = Octree::<Vec<(f32, f32, f32)>>::new();
-        o.add_child_at_pos(false, false, false).unwrap();
+        o.add_child_at_pos(false, false, false, Octree::new())
+            .unwrap();
         let result = o.remove_child_at_pos(false, false, false);
         assert!(result.is_some());
         assert!(o.get_child_at_pos(false, false, false).is_none());

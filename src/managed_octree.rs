@@ -5,6 +5,7 @@ use std::{
     borrow::{Borrow, BorrowMut},
     collections::HashMap,
     hash::Hash,
+    mem,
     ops::{Add, Div, Sub},
 };
 
@@ -12,9 +13,27 @@ pub type ManagedOctree<D, S> = Octree<ManagedOctreeData<D, S>>;
 pub type ManagedVecOctree<T, S> = ManagedOctree<Vec<T>, S>;
 pub type ManagedHashMapOctree<K, V, S> = ManagedOctree<HashMap<K, V>, S>;
 
-/// A type that will allow the underlying collection to be treated generically.
+/// A trait that will allow the underlying collection to be treated generically.
 pub trait OctreeCollection<I> {
     fn add(&mut self, item: I) -> Option<()>;
+}
+
+pub trait CentredItem<S> {
+    fn centre(&self) -> (S, S, S);
+}
+
+impl<S> CentredItem<S> for (S, S, S)
+where
+    S: Copy,
+{
+    fn centre(&self) -> (S, S, S) { *self }
+}
+
+impl<S, K> CentredItem<S> for (K, (S, S, S))
+where
+    S: Copy,
+{
+    fn centre(&self) -> (S, S, S) { self.1 }
 }
 
 impl<I> OctreeCollection<I> for Vec<I> {
@@ -64,7 +83,7 @@ where
         Self {
             centre: (S::default(), S::default(), S::default()),
             half_length: S::one(),
-            max_size: 0,
+            max_size: 1,
             drop_below_size: 1,
             len: 0,
             data: D::default(),
@@ -91,16 +110,32 @@ where
     pub fn get_data_mut(&mut self) -> &mut D { self.data.borrow_mut() }
 }
 
-impl<D, S> ManagedOctree<D, S>
+impl<D, S, T> ManagedOctree<D, S>
 where
-    D: Default + Empty + Len + Clear,
+    D: Default
+        + Empty
+        + Len
+        + Clear
+        + IntoIterator<Item = T>
+        + OctreeCollection<T>,
+    T: CentredItem<S>,
     S: Default
         + Copy
         + One
+        + PartialOrd
         + Add<S, Output = S>
         + Sub<S, Output = S>
         + Div<S, Output = S>,
 {
+    #[must_use]
+    pub fn new_managed(centre: (S, S, S), half_length: S) -> Self {
+        Self::new_with_data(ManagedOctreeData {
+            centre,
+            half_length,
+            ..ManagedOctreeData::default()
+        })
+    }
+
     /// Set `max_size`
     #[must_use]
     pub fn with_max_size(mut self, max_size: usize) -> Self {
@@ -122,10 +157,7 @@ where
     }
 
     /// Adds data to the node without flushing/rebalancing the tree.
-    pub fn add<T>(&mut self, item: T)
-    where
-        D: OctreeCollection<T>,
-    {
+    pub fn add(&mut self, item: T) {
         self.data.data.add(item);
         self.data.len += 1;
     }
@@ -134,6 +166,63 @@ where
     pub fn clear_data(&mut self) {
         self.data.len -= self.data.data.len();
         self.data.data.clear()
+    }
+
+    pub fn rebalance(&mut self) {
+        let bucket_counts = self.move_to_existing_children();
+        if self.data.data.len() <= self.data.max_size {
+            return;
+        }
+        let bucket_sizes = Self::sort_bucket_sizes(bucket_counts);
+        let mut new_size = self.data.data.len();
+        for (max_idx, max_val) in bucket_sizes {
+            let (px, py, pz) = Self::get_child_pos_at_idx(max_idx);
+            let (centre, half_length) =
+                self.get_child_centre_and_half_length_at_pos(px, py, pz);
+            self.add_child(
+                max_idx,
+                Self::new_managed(centre, half_length)
+                    .with_max_size(self.data.max_size)
+                    .with_drop_below_size(self.data.drop_below_size),
+            )
+            .unwrap();
+            new_size -= max_val;
+            if new_size <= self.data.max_size {
+                break;
+            }
+        }
+        self.move_to_existing_children();
+    }
+
+    fn sort_bucket_sizes(sizes: [usize; 8]) -> Vec<(usize, usize)> {
+        let mut bucket_sizes: Vec<(usize, usize)> =
+            sizes.iter().enumerate().map(|(i, &v)| (i, v)).collect();
+        bucket_sizes.sort_unstable_by(|(_ai, am), (_bi, bm)| {
+            bm.partial_cmp(am).unwrap()
+        });
+        bucket_sizes
+    }
+
+    /// Moves any objects that should belong to a child to that child if it
+    /// exists. Returns the bucket sizes of any remaining items.
+    fn move_to_existing_children(&mut self) -> [usize; 8] {
+        let (cx, cy, cz) = self.data.centre;
+
+        let mut result = [0; 8];
+        let mut old_d = D::default();
+        mem::swap(&mut old_d, &mut self.data.data);
+        for item in old_d {
+            let (ix, iy, iz) = item.centre();
+            let idx = Self::get_child_idx_at_pos(ix > cx, iy > cy, iz > cz);
+            if let Some(child) = &mut self.children[idx] {
+                child.add(item);
+            } else {
+                self.add(item);
+                result[idx] += 1;
+            }
+        }
+
+        result
     }
 
     fn get_child_centre_and_half_length_at_pos(
@@ -154,45 +243,6 @@ where
             (true, true, false) => ((cx + hhl, cy + hhl, cz - hhl), (hhl)),
             (true, true, true) => ((cx + hhl, cy + hhl, cz + hhl), (hhl)),
         }
-    }
-}
-
-impl<T, S> ManagedVecOctree<T, S>
-where
-    S: Default
-        + Copy
-        + One
-        + Add<S, Output = S>
-        + Sub<S, Output = S>
-        + Div<S, Output = S>,
-{
-    #[must_use]
-    pub fn new_managed(centre: (S, S, S), half_length: S) -> Self {
-        Self::new_with_data(ManagedOctreeData {
-            centre,
-            half_length,
-            ..ManagedOctreeData::default()
-        })
-    }
-}
-
-impl<K, V, S> ManagedHashMapOctree<K, V, S>
-where
-    K: Eq + Hash,
-    S: Default
-        + Copy
-        + One
-        + Add<S, Output = S>
-        + Sub<S, Output = S>
-        + Div<S, Output = S>,
-{
-    #[must_use]
-    pub fn new_managed(centre: (S, S, S), half_length: S) -> Self {
-        Self::new_with_data(ManagedOctreeData {
-            centre,
-            half_length,
-            ..ManagedOctreeData::default()
-        })
     }
 }
 
@@ -253,31 +303,40 @@ mod tests {
 
     #[test]
     fn test_with_drop_below_size() {
-        let o =
-            ManagedVecOctree::<f32, f32>::new_managed((0.0, 0.0, 0.0), 1000.0)
-                .with_drop_below_size(3);
+        let o = ManagedVecOctree::<(f32, f32, f32), f32>::new_managed(
+            (0.0, 0.0, 0.0),
+            1000.0,
+        )
+        .with_drop_below_size(3);
         assert_eq!(o.data.drop_below_size, 3);
     }
 
     #[test]
     #[should_panic]
     fn test_with_drop_below_size_0_panics() {
-        let _ = ManagedVecOctree::<f32, f32>::new_managed((0.0, 0.0, 0.0), 1000.0)
-            .with_drop_below_size(0);
+        let _ = ManagedVecOctree::<(f32, f32, f32), f32>::new_managed(
+            (0.0, 0.0, 0.0),
+            1000.0,
+        )
+        .with_drop_below_size(0);
     }
 
     #[test]
     fn test_with_max_size() {
-        let o =
-            ManagedVecOctree::<f32, f32>::new_managed((0.0, 0.0, 0.0), 1000.0)
-                .with_max_size(3);
+        let o = ManagedVecOctree::<(f32, f32, f32), f32>::new_managed(
+            (0.0, 0.0, 0.0),
+            1000.0,
+        )
+        .with_max_size(3);
         assert_eq!(o.data.max_size, 3);
     }
 
     #[test]
     fn test_get_child_centre_and_half_length_neg() {
-        let o =
-            ManagedVecOctree::<f32, f32>::new_managed((0.0, 0.0, 0.0), 1000.0);
+        let o = ManagedVecOctree::<(f32, f32, f32), f32>::new_managed(
+            (0.0, 0.0, 0.0),
+            1000.0,
+        );
         let ((cx, cy, cz), half_length) =
             o.get_child_centre_and_half_length_at_pos(false, false, false);
         assert_relative_eq!(cx, -500.0);
@@ -288,8 +347,10 @@ mod tests {
 
     #[test]
     fn test_get_child_centre_and_half_length_pos() {
-        let o =
-            ManagedVecOctree::<f32, f32>::new_managed((0.0, 0.0, 0.0), 1000.0);
+        let o = ManagedVecOctree::<(f32, f32, f32), f32>::new_managed(
+            (0.0, 0.0, 0.0),
+            1000.0,
+        );
         let ((cx, cy, cz), half_length) =
             o.get_child_centre_and_half_length_at_pos(true, true, true);
         assert_relative_eq!(cx, 500.0);
@@ -300,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_get_child_centre_and_half_length_partial_pos_off_centre() {
-        let o = ManagedVecOctree::<f32, f32>::new_managed(
+        let o = ManagedVecOctree::<(f32, f32, f32), f32>::new_managed(
             (100.0, 200.0, 300.0),
             1000.0,
         );
@@ -314,21 +375,48 @@ mod tests {
 
     #[test]
     fn test_vec_add() {
-        let mut o =
-            ManagedVecOctree::<f32, f32>::new_managed((0.0, 0.0, 0.0), 1000.0);
+        let mut o = ManagedVecOctree::<(f32, f32, f32), f32>::new_managed(
+            (0.0, 0.0, 0.0),
+            1000.0,
+        );
         assert_eq!(o.len(), 0);
-        o.add(123.45);
+        o.add((123.45, 234.567, 345.678));
         assert_eq!(o.len(), 1);
     }
 
     #[test]
     fn test_hash_add() {
-        let mut o = ManagedHashMapOctree::<u32, f32, f32>::new_managed(
+        let mut o =
+            ManagedHashMapOctree::<u32, (f32, f32, f32), f32>::new_managed(
+                (0.0, 0.0, 0.0),
+                1000.0,
+            );
+        assert_eq!(o.len(), 0);
+        o.add((123, (123.45, 234.567, 345.678)));
+        assert_eq!(o.len(), 1);
+    }
+
+    #[test]
+    fn test_rebalance_max_2() {
+        let mut o = ManagedVecOctree::<(f32, f32, f32), f32>::new_managed(
             (0.0, 0.0, 0.0),
             1000.0,
+        )
+        .with_max_size(2);
+        o.add((1.0, 1.0, 1.0));
+        o.add((2.0, 2.0, 1.0));
+        o.add((-1.0, -1.0, -1.0));
+        o.rebalance();
+        assert_eq!(o.data.data.len(), 1);
+        assert!(o.get_child_at_pos(true, true, true).is_some());
+        assert!(o.get_child_at_pos(false, false, false).is_none());
+        assert_eq!(
+            o.get_child_at_pos(true, true, true)
+                .unwrap()
+                .data
+                .data
+                .len(),
+            2
         );
-        assert_eq!(o.len(), 0);
-        o.add((123, 456.789));
-        assert_eq!(o.len(), 1);
     }
 }
