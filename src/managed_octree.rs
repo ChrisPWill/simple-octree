@@ -1,5 +1,5 @@
 use super::Octree;
-use len_trait::{Empty, Len};
+use len_trait::{Clear, Empty, Len};
 use num::One;
 use std::{
     borrow::{Borrow, BorrowMut},
@@ -11,6 +11,31 @@ use std::{
 pub type ManagedOctree<D, S> = Octree<ManagedOctreeData<D, S>>;
 pub type ManagedVecOctree<T, S> = ManagedOctree<Vec<T>, S>;
 pub type ManagedHashMapOctree<K, V, S> = ManagedOctree<HashMap<K, V>, S>;
+
+/// A type that will allow the underlying collection to be treated generically.
+pub trait OctreeCollection<I> {
+    fn add(&mut self, item: I) -> Option<()>;
+}
+
+impl<I> OctreeCollection<I> for Vec<I> {
+    fn add(&mut self, item: I) -> Option<()> {
+        self.push(item);
+        Some(())
+    }
+}
+
+impl<K, V> OctreeCollection<(K, V)> for HashMap<K, V>
+where
+    K: Eq + Hash,
+{
+    fn add(&mut self, (key, val): (K, V)) -> Option<()> {
+        if self.contains_key(&key) {
+            return None;
+        }
+        self.insert(key, val);
+        Some(())
+    }
+}
 
 pub struct ManagedOctreeData<D, S>
 where
@@ -66,7 +91,7 @@ where
 
 impl<D, S> ManagedOctree<D, S>
 where
-    D: Default + Empty + Len,
+    D: Default + Empty + Len + Clear,
     S: Default
         + Copy
         + One
@@ -79,6 +104,21 @@ where
     pub fn with_max_size(mut self, max_size: usize) -> Self {
         self.data.max_size = max_size;
         self
+    }
+
+    /// Adds data to the node without flushing/rebalancing the tree.
+    pub fn add<T>(&mut self, item: T)
+    where
+        D: OctreeCollection<T>,
+    {
+        self.data.data.add(item);
+        self.data.len += 1;
+    }
+
+    /// Clears data from the node (not the whole tree)
+    pub fn clear_data(&mut self) {
+        self.data.len -= self.data.data.len();
+        self.data.data.clear()
     }
 
     fn get_child_centre_and_half_length_at_pos(
@@ -165,28 +205,6 @@ where
     fn len(&self) -> usize { self.data.len }
 }
 
-impl<T, S> ManagedVecOctree<T, S>
-where
-    S: Default
-        + Copy
-        + One
-        + Add<S, Output = S>
-        + Sub<S, Output = S>
-        + Div<S, Output = S>,
-{
-    /// Adds data to the node without flushing/rebalancing the tree.
-    pub fn add(&mut self, item: T) {
-        self.data.data.push(item);
-        self.data.len += 1;
-    }
-
-    /// Clears data from the node (not the whole tree)
-    pub fn clear_data(&mut self) {
-        self.data.len -= self.data.data.len();
-        self.data.data.clear()
-    }
-}
-
 impl<K, V, S> Empty for ManagedHashMapOctree<K, V, S>
 where
     K: Eq + Hash,
@@ -211,30 +229,6 @@ where
         + Div<S, Output = S>,
 {
     fn len(&self) -> usize { self.data.len }
-}
-
-impl<K, V, S> ManagedHashMapOctree<K, V, S>
-where
-    K: Eq + Hash,
-    S: Default
-        + Copy
-        + One
-        + Add<S, Output = S>
-        + Sub<S, Output = S>
-        + Div<S, Output = S>,
-{
-    /// Adds data to the node without flushing/rebalancing the tree.
-    pub fn add(&mut self, (key, value): (K, V)) {
-        if self.data.data.insert(key, value).is_none() {
-            self.data.len += 1;
-        }
-    }
-
-    /// Clears data from the node (not the whole tree)
-    pub fn clear_data(&mut self) {
-        self.data.len -= self.data.data.len();
-        self.data.data.clear()
-    }
 }
 
 #[cfg(test)]
